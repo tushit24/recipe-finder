@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Recipe Finder
 
 A modern recipe management application built with Next.js, featuring AI-powered recipe generation and Google Photos integration.
@@ -57,5 +57,4 @@ npm run lint         # Run ESLint
 npm run typecheck    # Run TypeScript check
 ```
 =======
-# recipe-finder
->>>>>>> 6aad410c0a2949ca368df8f199fe053f8f3747d5
+
