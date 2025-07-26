@@ -2,6 +2,9 @@
 # Recipe Finder
 
 A modern recipe management application built with Next.js, featuring AI-powered recipe generation and Google Photos integration.
+## Live Demo
+
+Check out the live deployment here: [Recipe Finder App](https://recipe-finder-6s0vaoy7s-cyber-rishabhs-projects.vercel.app)
 
 ## Features
 
