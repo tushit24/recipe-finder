@@ -1,0 +1,258 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import type { Recipe } from '@/lib/data';
+import { cuisines } from '@/lib/data';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { X, Plus, Loader2, ChefHat } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast"
+import Image from 'next/image';
+import { useAuth } from '@/hooks/use-auth';
+import { addRecipe } from '@/lib/actions';
+import { PhotoUpload } from './PhotoUpload';
+
+interface RecipeFormProps {
+  initialData?: Partial<Recipe>;
+  formType: 'Add' | 'Edit';
+  isAiGenerating?: boolean;
+}
+
+const toDataURL = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+});
+
+export function RecipeForm({ initialData, formType, isAiGenerating = false }: RecipeFormProps) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  
+  const [title, setTitle] = useState('');
+  const [cuisine, setCuisine] = useState('');
+  const [ingredients, setIngredients] = useState<string[]>(['']);
+  const [instructions, setInstructions] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (initialData) {
+        setTitle(initialData.title || '');
+        setCuisine(initialData.cuisine || '');
+        setIngredients(initialData.ingredients?.length ? initialData.ingredients : ['']);
+        const instructionsText = Array.isArray(initialData.instructions) ? initialData.instructions.join('\n') : (initialData.instructions || '');
+        setInstructions(instructionsText);
+        
+        if (initialData.imageUrl) {
+          setImagePreview(initialData.imageUrl);
+        }
+    }
+  }, [initialData]);
+
+  const handleIngredientChange = (index: number, value: string) => {
+    const newIngredients = [...ingredients];
+    newIngredients[index] = value;
+    setIngredients(newIngredients);
+  };
+
+  const addIngredient = () => {
+    setIngredients([...ingredients, '']);
+  };
+
+  const removeIngredient = (index: number) => {
+    const newIngredients = ingredients.filter((_, i) => i !== index);
+    setIngredients(newIngredients);
+  };
+  
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const dataUrl = await toDataURL(file);
+      setImagePreview(dataUrl);
+    }
+  };
+
+
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+        toast({
+            variant: 'destructive',
+            title: 'Not Authenticated',
+            description: 'You must be logged in to add a recipe.',
+        });
+        return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await addRecipe({
+        title,
+        cuisine,
+        ingredients: ingredients.filter(ing => ing.trim() !== ''),
+        instructions: instructions.split('\n').filter(line => line.trim() !== ''),
+        imagePreview,
+        createdBy: user.id,
+        imageHint: initialData?.imageHint || title.toLowerCase().split(' ').slice(0,2).join(' '),
+      });
+      toast({
+        title: 'Recipe Added!',
+        description: 'Your beautiful recipe has been saved.',
+      });
+      router.push('/');
+    } catch (error) {
+        console.error(error);
+        toast({
+            variant: 'destructive',
+            title: 'An Error Occurred',
+            description: 'Failed to save the recipe. Please try again.',
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const isSubmitDisabled = isAiGenerating || isSubmitting;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-2xl">
+          <CardHeader className="text-center pb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+              <ChefHat className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="font-headline text-4xl bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+              {formType} Recipe
+            </CardTitle>
+            <CardDescription className="text-lg text-muted-foreground">
+              {initialData ? 'Review the details generated by AI.' : `Fill out the details below to ${formType.toLowerCase()} your recipe.`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-8">
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <Label htmlFor="title" className="text-base font-medium">Recipe Name</Label>
+                  <Input 
+                    id="title" 
+                    value={title} 
+                    onChange={(e) => setTitle(e.target.value)} 
+                    required 
+                    disabled={isSubmitDisabled}
+                    className="h-12 text-base"
+                    placeholder="Enter recipe name..."
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label htmlFor="cuisine" className="text-base font-medium">Cuisine</Label>
+                  <Select value={cuisine} onValueChange={setCuisine} required disabled={isSubmitDisabled}>
+                    <SelectTrigger id="cuisine" className="h-12 text-base">
+                      <SelectValue placeholder="Select a cuisine" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cuisines.filter(c => c !== 'All').map(c => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-base font-medium">Ingredients</Label>
+                <div className="space-y-3">
+                  {ingredients.map((ingredient, index) => (
+                    <div key={index} className="flex items-center gap-3">
+                      <Input
+                        value={ingredient}
+                        onChange={(e) => handleIngredientChange(index, e.target.value)}
+                        placeholder={`Ingredient ${index + 1}`}
+                        disabled={isSubmitDisabled}
+                        className="h-12 text-base"
+                      />
+                      {ingredients.length > 1 && (
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => removeIngredient(index)} 
+                          disabled={isSubmitDisabled}
+                          className="h-12 w-12 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="h-5 w-5" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={addIngredient} 
+                  disabled={isSubmitDisabled}
+                  className="border-primary/20 hover:bg-primary/5"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add Ingredient
+                </Button>
+              </div>
+              
+              <div className="space-y-3">
+                <Label htmlFor="instructions" className="text-base font-medium">Instructions (one per line)</Label>
+                <Textarea
+                  id="instructions"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  required
+                  rows={12}
+                  placeholder="Enter recipe instructions, one per line..."
+                  disabled={isSubmitDisabled}
+                  className="text-base resize-none"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-base font-medium">Recipe Image</Label>
+                <PhotoUpload 
+                  onPhotoSelect={setImagePreview}
+                  disabled={isSubmitDisabled}
+                  currentImage={imagePreview}
+                />
+              </div>
+
+              <div className="flex justify-end gap-4 pt-6">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => router.back()} 
+                  disabled={isSubmitDisabled}
+                  className="px-8 py-3"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isSubmitDisabled}
+                  className="bg-primary hover:bg-primary/90 text-white px-8 py-3"
+                >
+                  {isSubmitting && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+                  {isSubmitting ? 'Saving...' : `${formType} Recipe`}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
