@@ -55,6 +55,5 @@ npm run build        # Build for production
 npm run start        # Start production server
 npm run lint         # Run ESLint
 npm run typecheck    # Run TypeScript check
-```
-=======
+
 
